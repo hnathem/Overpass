@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatPct } from "@/lib/format";
 import { useData } from "@/lib/providers";
 
-import { NetworkMap } from "./NetworkMap";
+import { Globe } from "./Globe";
 import { Reveal } from "./Reveal";
 import { SectionHeading } from "./SectionHeading";
 
@@ -20,6 +20,19 @@ export function NetworkSection() {
     contactsById.set(contact.station_id, (contactsById.get(contact.station_id) ?? 0) + 1);
   }
 
+  // Stations with a contact happening right around "now" — they glow brighter.
+  const nowMs = new Date(data.meta.now).getTime();
+  const soonMs = nowMs + 20 * 60_000;
+  const activeIds = new Set(
+    data.contacts
+      .filter((c) => {
+        const start = new Date(c.start).getTime();
+        const end = new Date(c.end).getTime();
+        return (start <= nowMs && nowMs <= end) || (nowMs <= start && start <= soonMs);
+      })
+      .map((c) => c.station_id),
+  );
+
   return (
     <section id="network" className="border-t border-hairline bg-plane">
       <div className="mx-auto max-w-[1200px] px-5 py-20 md:px-8">
@@ -27,20 +40,14 @@ export function NetworkSection() {
           <SectionHeading
             index="02"
             title="Ground network"
-            subtitle="Where the fleet talks to Earth. Live contacts trail a signal to their satellite; hover a station to focus it."
+            subtitle="Where the fleet talks to Earth. Drag the globe to spin it; each ground station glows at its real location, and sites with a live contact pulse."
           />
         </Reveal>
 
         <Reveal>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[3fr_2fr]">
             <div className="rounded-card border border-hairline bg-surface p-5">
-              <NetworkMap
-                stations={data.stations}
-                contacts={data.contacts}
-                now={data.meta.now}
-                hovered={hovered}
-                onHover={setHovered}
-              />
+              <Globe stations={data.stations} activeIds={activeIds} hovered={hovered} />
             </div>
 
             <div className="flex flex-col gap-2">
