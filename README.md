@@ -106,10 +106,12 @@ make seed && make api
 ## The dashboard
 
 A Next.js mission-control dashboard (in `web/`) reads the exported JSON and
-renders it: a Mission Control overview, the antenna **Schedule** timeline, a
-**Ground Stations** map, the **Fleet**, and the **Requests** list. It's
-dark-first with a cyan signal accent and monospace telemetry (UTC times,
-satellite and station IDs), with a light theme available.
+renders it as one scrolling console: an animated hero with a live UTC clock, an
+interactive **Schedule** timeline (hover a row to focus a station, click a
+contact for its details), a **Network** map that trails a signal arc to any
+station with a live contact, and a tabbed **Operations** panel for the fleet and
+the request queue. Dark-first with a cyan signal accent, monospace telemetry,
+hand-built scroll and count-up animation, and a light theme available.
 
 Run it locally against freshly exported data:
 
