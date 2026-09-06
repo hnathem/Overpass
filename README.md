@@ -106,12 +106,21 @@ make seed && make api
 ## The dashboard
 
 A Next.js mission-control dashboard (in `web/`) reads the exported JSON and
-renders it as one scrolling console: an animated hero with a live UTC clock, an
-interactive **Schedule** timeline (hover a row to focus a station, click a
-contact for its details), a **Network** map that trails a signal arc to any
-station with a live contact, and a tabbed **Operations** panel for the fleet and
-the request queue. Dark-first with a cyan signal accent, monospace telemetry,
-hand-built scroll and count-up animation, and a light theme available.
+renders it as one scrolling console:
+
+- an animated hero with a live UTC clock and count-up headline stats;
+- an interactive **Schedule** timeline — hover a row to focus a station, click a
+  contact for its details;
+- a **Network** view built on an interactive globe of the real Earth, where
+  ground stations glow at their true coordinates and satellites track overhead
+  in real time, beaming down to whichever station they're passing over; drag to
+  spin it, or click a station to turn to it;
+- a tabbed **Operations** panel for the fleet and the request queue.
+
+It's dark-first with a cyan signal accent, monospace telemetry, and a light
+theme. The scroll and count-up animations are hand-built; the globe uses
+[d3-geo](https://github.com/d3/d3-geo) for the map projection over real
+coastline data.
 
 Run it locally against freshly exported data:
 
@@ -123,7 +132,7 @@ cd web && npm install && npm run dev    # http://localhost:3000
 It builds to a fully static site (`next build` -> `web/out/`), which is what
 deploys to GitHub Pages.
 
-## What's here so far
+## What's included
 
 | Stage | Status |
 |-------|--------|
