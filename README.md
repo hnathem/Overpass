@@ -101,6 +101,24 @@ export DATABASE_URL=postgresql+psycopg2://overpass:overpass@localhost:5432/overp
 make seed && make api
 ```
 
+## The dashboard
+
+A Next.js mission-control dashboard (in `web/`) reads the exported JSON and
+renders it: a Mission Control overview, the antenna **Schedule** timeline, a
+**Ground Stations** map, the **Fleet**, and the **Requests** list. It's
+dark-first with a cyan signal accent and monospace telemetry (UTC times,
+satellite and station IDs), with a light theme available.
+
+Run it locally against freshly exported data:
+
+```bash
+make export                             # writes web/public/data/*.json
+cd web && npm install && npm run dev    # http://localhost:3000
+```
+
+It builds to a fully static site (`next build` -> `web/out/`), which is what
+deploys to GitHub Pages.
+
 ## What's here so far
 
 | Stage | Status |
@@ -108,7 +126,7 @@ make seed && make api
 | Domain model + scheduling algorithm (Python) | ✅ done |
 | Scenario simulator + metrics | ✅ done |
 | FastAPI service + PostgreSQL + JWT auth | ✅ done |
-| Next.js mission-control dashboard | ⏳ next |
+| Next.js mission-control dashboard | ✅ done |
 | CI + GitHub Pages deploy + docs | ⏳ next |
 
 ## Repository layout
@@ -130,6 +148,7 @@ overpass/
 │   ├── export.py       # write the schedule to static JSON for the dashboard
 │   └── cli.py          # a small `overpass demo` command
 ├── docker-compose.yml  # PostgreSQL, for running production-like
+├── web/                # Next.js mission-control dashboard (static export)
 └── tests/              # scheduler, service, API, and export tests
 ```
 
