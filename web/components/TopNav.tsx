@@ -37,21 +37,18 @@ export function TopNav() {
       <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-5 py-3 md:px-8">
         <a href="#overview" className="flex items-center gap-2.5">
           <Logo size={26} />
-          <span className={`text-base font-semibold tracking-tight ${scrolled ? "text-primary" : "text-white"}`}>
-            Overpass
-          </span>
+          <span className="text-base font-semibold tracking-tight text-primary">Overpass</span>
         </a>
 
         <nav className="hidden items-center gap-1 md:flex">
           {SECTIONS.map((section) => {
             const isActive = active === section.id;
-            const base = scrolled ? "text-secondary" : "text-white/70";
             return (
               <a
                 key={section.id}
                 href={`#${section.id}`}
                 className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                  isActive ? (scrolled ? "text-primary" : "text-white") : `${base} hover:text-primary`
+                  isActive ? "text-primary" : "text-secondary hover:text-primary"
                 }`}
               >
                 {section.label}
@@ -63,20 +60,14 @@ export function TopNav() {
 
         <div className="flex items-center gap-3">
           {data && (
-            <span
-              className={`hidden items-center gap-1.5 font-mono text-xs sm:flex ${
-                scrolled ? "text-secondary" : "text-white/70"
-              }`}
-            >
+            <span className="hidden items-center gap-1.5 font-mono text-xs text-secondary sm:flex">
               <span className="pulse h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
               {formatTime(data.meta.now)}
             </span>
           )}
           <button
             onClick={toggle}
-            className={`rounded-lg border px-2.5 py-1 text-sm transition-colors ${
-              scrolled ? "border-hairline text-secondary hover:text-primary" : "border-white/20 text-white/80 hover:text-white"
-            }`}
+            className="rounded-lg border border-hairline px-2.5 py-1 text-sm text-secondary transition-colors hover:text-primary"
             aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           >
             {theme === "dark" ? "☀" : "☾"}

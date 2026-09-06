@@ -17,11 +17,11 @@ export function CountStat({
   const animated = useCountUp(value);
   return (
     <div>
-      <div className="tabular font-mono text-2xl font-semibold text-white md:text-3xl">
+      <div className="tabular font-mono text-2xl font-semibold text-primary md:text-3xl">
         {animated.toFixed(decimals)}
         {suffix}
       </div>
-      <div className="mt-1 text-xs uppercase tracking-wider text-white/50">{label}</div>
+      <div className="mt-1 text-xs uppercase tracking-wider text-muted">{label}</div>
     </div>
   );
 }
