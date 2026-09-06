@@ -17,7 +17,7 @@ data is used.
 
 ```
 requests (who needs to talk, how long, how urgent)
-        +                                   greedy, priority-first
+        +                                   priority-first
 pass windows (when each satellite   ->      allocation onto free    ->   a conflict-free
 can reach each station)                     antennas                     schedule + the
         +                                                                requests that
@@ -26,7 +26,7 @@ ground stations (antennas, online/offline)                              didn't f
 
 ## How the scheduler works
 
-The core is a greedy algorithm, and the whole idea fits in two steps:
+The core is a priority-first algorithm, and the whole idea fits in two steps:
 
 1. **Sort requests by importance** — highest priority first, then the tightest
    deadline, then id (so the result is stable and repeatable).
@@ -38,8 +38,9 @@ An antenna is never double-booked: each station has one or more antennas, and a
 contact is only placed on an antenna that is free for its whole duration. A
 request that can't be placed is reported with a plain reason — the window was
 too short, every antenna was busy, or it couldn't finish before its deadline.
-Greedy scheduling won't always find the densest possible packing, but for
-prioritized work over scarce antennas it produces a sensible, explainable plan.
+Taking the earliest workable slot won't always find the densest possible
+packing, but for prioritized work over scarce antennas it produces a sensible,
+explainable plan.
 
 See [`scheduler.py`](src/overpass/scheduler.py) for the algorithm and
 [`models.py`](src/overpass/models.py) for the domain it works on.
@@ -78,7 +79,7 @@ Antenna utilization by station
 overpass/
 ├── src/overpass/
 │   ├── models.py       # domain types: satellites, stations, passes, contacts
-│   ├── scheduler.py    # the greedy, priority-first scheduling algorithm
+│   ├── scheduler.py    # the priority-first scheduling algorithm
 │   ├── simulate.py     # generate a synthetic scenario to schedule
 │   ├── metrics.py      # summary metrics (utilization, schedule rate)
 │   └── cli.py          # a small `overpass demo` command

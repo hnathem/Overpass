@@ -4,7 +4,7 @@ Given the pass windows (when each satellite can talk to each station) and a set
 of contact requests, decide which requests get booked, onto which antenna, and
 when — without ever double-booking an antenna.
 
-**The strategy** is a greedy one, and it's worth stating plainly because it's
+**The strategy** is priority-first, and it's worth stating plainly because it's
 the whole idea:
 
 1. Sort the requests by importance: highest priority first, then the tightest
@@ -13,10 +13,10 @@ the whole idea:
    has a free antenna for the time it needs. Taking the earliest workable slot
    leaves later slots open for the requests still to come.
 
-Greedy scheduling like this is fast and easy to reason about. It won't always
-find the theoretically densest packing, but for prioritised work over scarce
-antennas it produces a sensible, defensible plan — and, importantly, one a
-human can look at and understand.
+Scheduling this way is fast and easy to reason about. It won't always find the
+theoretically densest packing, but for prioritised work over scarce antennas it
+produces a sensible, defensible plan — and, importantly, one a human can look at
+and understand.
 """
 
 from __future__ import annotations
