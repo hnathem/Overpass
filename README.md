@@ -63,13 +63,51 @@ Antenna utilization by station
   ...
 ```
 
+## The API and database
+
+The schedule is served by a FastAPI app backed by a database (SQLAlchemy). It
+defaults to a local SQLite file, so there's nothing to install:
+
+```bash
+make seed        # load a scenario and create the default operator user
+make api         # http://127.0.0.1:8000  (interactive docs at /docs)
+```
+
+Reads are open so the dashboard can be explored freely; the two actions that
+change the plan require a token. Log in with the demo account (`operator` /
+`overpass`), then call the protected endpoints with the returned bearer token.
+
+| Endpoint | Auth | Returns / does |
+|----------|------|----------------|
+| `POST /auth/token` | — | Log in, get a JWT |
+| `GET /api/meta` | — | Time span, the "now" line, and counts |
+| `GET /api/satellites` · `/api/stations` | — | The fleet and the ground network |
+| `GET /api/contacts` | — | The scheduled contacts, with outcomes |
+| `GET /api/requests` | — | Every request: scheduled (where) or not (why) |
+| `GET /api/metrics` | — | Schedule rate and per-station utilization |
+| `POST /api/requests` | ✔ | Add a contact request |
+| `POST /api/stations/{id}/status` | ✔ | Take a station on- or offline |
+
+Adding a request or taking a station offline changes what the scheduler returns
+on the next read — that's the resilience story (a downed station's work is
+reassigned to other passes).
+
+To run against **PostgreSQL** instead, start it with Docker and point the app at
+it — nothing else changes:
+
+```bash
+docker compose up -d
+export DATABASE_URL=postgresql+psycopg2://overpass:overpass@localhost:5432/overpass
+make seed && make api
+```
+
 ## What's here so far
 
 | Stage | Status |
 |-------|--------|
 | Domain model + scheduling algorithm (Python) | ✅ done |
 | Scenario simulator + metrics | ✅ done |
-| FastAPI service + PostgreSQL + auth | ⏳ next |
+| FastAPI service + PostgreSQL + JWT auth | ✅ done |
 | Next.js mission-control dashboard | ⏳ next |
 | CI + GitHub Pages deploy + docs | ⏳ next |
 
@@ -82,8 +120,17 @@ overpass/
 │   ├── scheduler.py    # the priority-first scheduling algorithm
 │   ├── simulate.py     # generate a synthetic scenario to schedule
 │   ├── metrics.py      # summary metrics (utilization, schedule rate)
+│   ├── outcomes.py     # fill in completed / failed / scheduled around "now"
+│   ├── db.py, orm.py   # SQLAlchemy engine and tables
+│   ├── security.py     # password hashing + JWT tokens
+│   ├── seed.py         # load a scenario + default user into the database
+│   ├── service.py      # database -> schedule snapshot, and the mutations
+│   ├── serialize.py    # shared JSON shapes for the API and the export
+│   ├── api.py          # the FastAPI application
+│   ├── export.py       # write the schedule to static JSON for the dashboard
 │   └── cli.py          # a small `overpass demo` command
-└── tests/              # scheduler correctness and end-to-end invariants
+├── docker-compose.yml  # PostgreSQL, for running production-like
+└── tests/              # scheduler, service, API, and export tests
 ```
 
 ## License

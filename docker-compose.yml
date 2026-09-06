@@ -1,0 +1,21 @@
+# Run Overpass against PostgreSQL instead of the default SQLite.
+#
+#   docker compose up -d
+#   export DATABASE_URL=postgresql+psycopg2://overpass:overpass@localhost:5432/overpass
+#   make seed && make api
+#
+# The application code is identical either way — only DATABASE_URL changes.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: overpass
+      POSTGRES_PASSWORD: overpass
+      POSTGRES_DB: overpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - overpass_pgdata:/var/lib/postgresql/data
+
+volumes:
+  overpass_pgdata:
