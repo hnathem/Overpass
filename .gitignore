@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Local database (added in a later stage)
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Next.js (front-end, added in a later stage)
+node_modules/
+.next/
+out/
+next-env.d.ts
+
+# Generated demo data exported for the static site
+web/public/data/
+
+# OS and editor noise
+.DS_Store
+.vscode/
+.idea/
