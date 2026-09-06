@@ -1,72 +1,62 @@
 "use client";
 
+import { geoDistance, geoGraticule10, geoOrthographic, geoPath } from "d3-geo";
 import { useEffect, useRef } from "react";
+import { feature } from "topojson-client";
+import land110m from "world-atlas/land-110m.json";
 
+import { orbitParams, subpoint } from "@/lib/orbits";
 import type { Station } from "@/lib/types";
 
-const DEG = Math.PI / 180;
-const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-const DOTS = 820; // points that make up the dotted sphere
-
-type Vec = { x: number; y: number; z: number };
-
-// A fixed cloud of points spread evenly over a unit sphere (Fibonacci sphere).
-// Rotated each frame to give the globe its surface.
-function makeSpherePoints(count: number): Vec[] {
-  const points: Vec[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const y = 1 - (i / (count - 1)) * 2;
-    const radius = Math.sqrt(1 - y * y);
-    const theta = i * GOLDEN;
-    points.push({ x: Math.cos(theta) * radius, y, z: Math.sin(theta) * radius });
-  }
-  return points;
-}
-
-// A latitude/longitude on the unit sphere (z toward the viewer at lon 0).
-function latLonToVec(lat: number, lon: number): Vec {
-  const b = lat * DEG;
-  const a = lon * DEG;
-  return { x: Math.cos(b) * Math.sin(a), y: Math.sin(b), z: Math.cos(b) * Math.cos(a) };
-}
-
-// Rotate a base vector by yaw (around Y) then pitch (around X).
-function rotate(v: Vec, yaw: number, pitch: number): Vec {
-  const x1 = v.x * Math.cos(yaw) + v.z * Math.sin(yaw);
-  const z1 = -v.x * Math.sin(yaw) + v.z * Math.cos(yaw);
-  const y2 = v.y * Math.cos(pitch) - z1 * Math.sin(pitch);
-  const z2 = v.y * Math.sin(pitch) + z1 * Math.cos(pitch);
-  return { x: x1, y: y2, z: z2 };
-}
+// Real coastlines (low-detail), decoded once.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const LAND = feature(land110m as any, (land110m as any).objects.land) as any;
+const GRATICULE = geoGraticule10();
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 /**
- * An interactive globe rendered on a canvas — no 3D library. Drag to spin it
- * (with momentum on release); otherwise it drifts slowly. Ground stations glow
- * at their real coordinates and rotate around the limb as the globe turns.
+ * An interactive globe of the real Earth, drawn on a canvas with d3-geo's
+ * orthographic projection. Continents and a graticule rotate under the pointer;
+ * ground stations glow at their true coordinates; satellites track live across
+ * the sky and beam down to whichever station they're currently over.
+ *
+ * Drag to spin (with momentum on release); it drifts gently otherwise. Setting
+ * `focusStation` smoothly turns the globe to bring that station to the front.
  */
 export function Globe({
   stations,
+  satelliteIds,
   activeIds,
   hovered,
+  focusStation,
 }: {
   stations: Station[];
+  satelliteIds: string[];
   activeIds: Set<string>;
   hovered: string | null;
+  focusStation: string | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const rotation = useRef({ lon: -70, lat: 18 }); // opens on the Atlantic
-  const velocity = useRef({ lon: 0, lat: 0 });
+  const rotation = useRef<[number, number]>([-70, -18]);
+  const velocity = useRef<[number, number]>([0, 0]);
   const dragging = useRef(false);
   const last = useRef({ x: 0, y: 0 });
+  const focusTarget = useRef<[number, number] | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
   useEffect(() => {
     hoveredRef.current = hovered;
   }, [hovered]);
+
+  // Turn to a station when it's clicked in the list.
+  useEffect(() => {
+    if (!focusStation) return;
+    const station = stations.find((s) => s.id === focusStation);
+    if (station) focusTarget.current = [-station.longitude, -station.latitude];
+  }, [focusStation, stations]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,18 +66,16 @@ export function Globe({
     if (!ctx) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const points = makeSpherePoints(DOTS);
-    const stationVecs = stations.map((s) => ({ station: s, base: latLonToVec(s.latitude, s.longitude) }));
+    const projection = geoOrthographic();
+    const path = geoPath(projection, ctx);
+    const sats = satelliteIds.map((id) => ({ id, params: orbitParams(id) }));
 
-    let width = 0;
-    let height = 0;
     let cx = 0;
     let cy = 0;
-    let radius = 0;
 
     function resize() {
-      width = parent!.clientWidth;
-      height = parent!.clientHeight;
+      const width = parent!.clientWidth;
+      const height = parent!.clientHeight;
       canvas!.width = width * dpr;
       canvas!.height = height * dpr;
       canvas!.style.width = `${width}px`;
@@ -95,102 +83,150 @@ export function Globe({
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
       cx = width / 2;
       cy = height / 2;
-      radius = Math.min(width, height) / 2 - 14;
+      projection.translate([cx, cy]).scale(Math.min(width, height) / 2 - 14);
     }
 
-    let time = 0;
+    function visible(lon: number, lat: number): boolean {
+      const center: [number, number] = [-rotation.current[0], -rotation.current[1]];
+      return geoDistance([lon, lat], center) < Math.PI / 2;
+    }
+
     function draw() {
-      time += 0.016;
       const light = document.documentElement.dataset.theme === "light";
-      const ocean1 = light ? "#bcd6ea" : "#12324a";
-      const ocean2 = light ? "#7fa8c9" : "#081019";
-      const grat = light ? "rgba(30,70,110,0.5)" : "rgba(130,180,220,0.4)";
+      const ocean1 = light ? "#cfe6f5" : "#102a3f";
+      const ocean2 = light ? "#a9cce5" : "#06121c";
+      const landFill = light ? "#eef3f7" : "#22425a";
+      const coast = light ? "rgba(30,80,120,0.35)" : "rgba(130,180,220,0.35)";
+      const grat = light ? "rgba(30,80,120,0.12)" : "rgba(130,180,220,0.13)";
       const accent = cssVar("--accent") || "#22d3ee";
+      const sat = cssVar("--warn") || "#f59e0b";
       const bad = cssVar("--bad") || "#ef4444";
-      const textColor = cssVar("--text-secondary") || "#9aa7b4";
+      const text = cssVar("--text-secondary") || "#9aa7b4";
 
-      const yaw = rotation.current.lon * DEG;
-      const pitch = rotation.current.lat * DEG;
+      projection.rotate(rotation.current);
+      const radius = projection.scale();
 
-      ctx!.clearRect(0, 0, width, height);
+      ctx!.clearRect(0, 0, cx * 2, cy * 2);
 
-      // the sphere, lit from the upper-left
-      const gradient = ctx!.createRadialGradient(
-        cx - radius * 0.35,
-        cy - radius * 0.35,
-        radius * 0.2,
-        cx,
-        cy,
-        radius,
-      );
+      // ocean
+      const gradient = ctx!.createRadialGradient(cx - radius * 0.35, cy - radius * 0.35, radius * 0.2, cx, cy, radius);
       gradient.addColorStop(0, ocean1);
       gradient.addColorStop(1, ocean2);
       ctx!.beginPath();
-      ctx!.arc(cx, cy, radius, 0, Math.PI * 2);
+      path({ type: "Sphere" });
       ctx!.fillStyle = gradient;
       ctx!.fill();
 
-      // dotted surface (front hemisphere only)
-      for (const point of points) {
-        const p = rotate(point, yaw, pitch);
-        if (p.z <= 0) continue;
-        ctx!.globalAlpha = 0.25 + p.z * 0.5;
+      // graticule
+      ctx!.beginPath();
+      path(GRATICULE);
+      ctx!.strokeStyle = grat;
+      ctx!.lineWidth = 0.5;
+      ctx!.stroke();
+
+      // continents
+      ctx!.beginPath();
+      path(LAND);
+      ctx!.fillStyle = landFill;
+      ctx!.fill();
+      ctx!.strokeStyle = coast;
+      ctx!.lineWidth = 0.5;
+      ctx!.stroke();
+
+      const nowSec = Date.now() / 1000;
+
+      // satellites (and a beam to any station they're currently over)
+      for (const { params } of sats) {
+        const [lon, lat] = subpoint(params, nowSec);
+        if (!visible(lon, lat)) continue;
+        const p = projection([lon, lat]);
+        if (!p) continue;
+        const satX = cx + (p[0] - cx) * 1.16;
+        const satY = cy + (p[1] - cy) * 1.16;
+
+        let overhead = false;
+        for (const station of stations) {
+          if (geoDistance([lon, lat], [station.longitude, station.latitude]) < 0.14) {
+            overhead = true;
+            break;
+          }
+        }
+
         ctx!.beginPath();
-        ctx!.arc(cx + radius * p.x, cy - radius * p.y, 0.9, 0, Math.PI * 2);
-        ctx!.fillStyle = grat;
+        ctx!.moveTo(p[0], p[1]);
+        ctx!.lineTo(satX, satY);
+        ctx!.strokeStyle = overhead ? accent : coast;
+        ctx!.globalAlpha = overhead ? 0.9 : 0.4;
+        ctx!.lineWidth = overhead ? 1.2 : 0.6;
+        ctx!.stroke();
+        ctx!.globalAlpha = 1;
+
+        ctx!.beginPath();
+        ctx!.arc(satX, satY, 2.2, 0, Math.PI * 2);
+        ctx!.fillStyle = sat;
         ctx!.fill();
       }
-      ctx!.globalAlpha = 1;
 
-      // stations
-      for (const { station, base } of stationVecs) {
-        const p = rotate(base, yaw, pitch);
-        if (p.z <= 0) continue; // on the far side
-        const sx = cx + radius * p.x;
-        const sy = cy - radius * p.y;
+      // ground stations
+      for (const station of stations) {
+        if (!visible(station.longitude, station.latitude)) continue;
+        const p = projection([station.longitude, station.latitude]);
+        if (!p) continue;
         const online = station.status === "online";
         const color = online ? accent : bad;
         const active = activeIds.has(station.id) && online;
-        const pulse = active ? 0.55 + 0.45 * Math.abs(Math.sin(time * 2)) : 0.4;
 
-        ctx!.globalAlpha = pulse;
+        ctx!.globalAlpha = active ? 0.55 + 0.4 * Math.abs(Math.sin(nowSec * 2)) : 0.4;
         ctx!.beginPath();
-        ctx!.arc(sx, sy, active ? 9 : 6, 0, Math.PI * 2);
+        ctx!.arc(p[0], p[1], active ? 9 : 6, 0, Math.PI * 2);
         ctx!.fillStyle = color;
         ctx!.fill();
-
         ctx!.globalAlpha = 1;
+
         ctx!.beginPath();
-        ctx!.arc(sx, sy, 2.6, 0, Math.PI * 2);
+        ctx!.arc(p[0], p[1], 2.6, 0, Math.PI * 2);
         ctx!.fillStyle = color;
         ctx!.fill();
 
         if (hoveredRef.current === station.id) {
           ctx!.beginPath();
-          ctx!.arc(sx, sy, 11, 0, Math.PI * 2);
+          ctx!.arc(p[0], p[1], 11, 0, Math.PI * 2);
           ctx!.strokeStyle = color;
           ctx!.lineWidth = 1;
           ctx!.stroke();
         }
 
-        ctx!.fillStyle = textColor;
+        ctx!.fillStyle = text;
         ctx!.font = "10px 'IBM Plex Mono', monospace";
-        ctx!.fillText(station.id.replace("GS-", ""), sx + 8, sy - 6);
+        ctx!.fillText(station.id.replace("GS-", ""), p[0] + 8, p[1] - 6);
       }
 
+      // advance rotation: follow the focus target, else drift + momentum
       if (!dragging.current) {
-        rotation.current.lon += 0.06 + velocity.current.lon;
-        rotation.current.lat += velocity.current.lat;
-        velocity.current.lon *= 0.95;
-        velocity.current.lat *= 0.95;
-        rotation.current.lat = Math.max(-85, Math.min(85, rotation.current.lat));
+        const target = focusTarget.current;
+        if (target) {
+          let dLon = (((target[0] - rotation.current[0] + 540) % 360) - 180);
+          rotation.current[0] += dLon * 0.12;
+          rotation.current[1] += (target[1] - rotation.current[1]) * 0.12;
+          if (Math.abs(dLon) < 0.4 && Math.abs(target[1] - rotation.current[1]) < 0.4) {
+            rotation.current = [target[0], target[1]];
+            focusTarget.current = null;
+          }
+        } else {
+          rotation.current[0] += 0.08 + velocity.current[0];
+          rotation.current[1] += velocity.current[1];
+          velocity.current[0] *= 0.94;
+          velocity.current[1] *= 0.94;
+          rotation.current[1] = Math.max(-90, Math.min(90, rotation.current[1]));
+        }
       }
       frame = requestAnimationFrame(draw);
     }
 
     function onDown(event: PointerEvent) {
       dragging.current = true;
-      velocity.current = { lon: 0, lat: 0 };
+      focusTarget.current = null;
+      velocity.current = [0, 0];
       last.current = { x: event.clientX, y: event.clientY };
       canvas!.style.cursor = "grabbing";
     }
@@ -198,9 +234,9 @@ export function Globe({
       if (!dragging.current) return;
       const dx = event.clientX - last.current.x;
       const dy = event.clientY - last.current.y;
-      rotation.current.lon += dx * 0.35;
-      rotation.current.lat = Math.max(-85, Math.min(85, rotation.current.lat - dy * 0.35));
-      velocity.current = { lon: dx * 0.35, lat: -dy * 0.35 };
+      rotation.current[0] += dx * 0.25;
+      rotation.current[1] = Math.max(-90, Math.min(90, rotation.current[1] - dy * 0.25));
+      velocity.current = [dx * 0.25, -dy * 0.25];
       last.current = { x: event.clientX, y: event.clientY };
     }
     function onUp() {
@@ -223,11 +259,11 @@ export function Globe({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("resize", resize);
     };
-  }, [stations, activeIds]);
+  }, [stations, satelliteIds, activeIds]);
 
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[420px] touch-none select-none">
-      <canvas ref={canvasRef} className="h-full w-full" aria-label="Interactive globe of ground stations" />
+    <div className="relative mx-auto aspect-square w-full max-w-[440px] touch-none select-none">
+      <canvas ref={canvasRef} className="h-full w-full" aria-label="Interactive globe of ground stations and satellites" />
     </div>
   );
 }

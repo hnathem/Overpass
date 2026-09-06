@@ -12,6 +12,7 @@ import { SectionHeading } from "./SectionHeading";
 export function NetworkSection() {
   const { data } = useData();
   const [hovered, setHovered] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
   if (!data) return null;
 
   const utilizationById = new Map(data.metrics.by_station.map((s) => [s.station_id, s.utilization]));
@@ -20,7 +21,6 @@ export function NetworkSection() {
     contactsById.set(contact.station_id, (contactsById.get(contact.station_id) ?? 0) + 1);
   }
 
-  // Stations with a contact happening right around "now" — they glow brighter.
   const nowMs = new Date(data.meta.now).getTime();
   const soonMs = nowMs + 20 * 60_000;
   const activeIds = new Set(
@@ -40,28 +40,44 @@ export function NetworkSection() {
           <SectionHeading
             index="02"
             title="Ground network"
-            subtitle="Where the fleet talks to Earth. Drag the globe to spin it; each ground station glows at its real location, and sites with a live contact pulse."
+            subtitle="A live view of the network on the real Earth. Drag to spin the globe; satellites track overhead in real time and beam down to the station they're passing over. Click a station to turn to it."
           />
         </Reveal>
 
         <Reveal>
           <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[3fr_2fr]">
             <div className="rounded-card border border-hairline bg-surface p-5">
-              <Globe stations={data.stations} activeIds={activeIds} hovered={hovered} />
+              <Globe
+                stations={data.stations}
+                satelliteIds={data.satellites.map((s) => s.id)}
+                activeIds={activeIds}
+                hovered={hovered}
+                focusStation={focused}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden /> Ground station
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-warn" aria-hidden /> Satellite
+                </span>
+                <span>drag to rotate · click a station to focus</span>
+              </div>
             </div>
 
             <div className="flex flex-col gap-2">
               {data.stations.map((station) => {
                 const utilization = utilizationById.get(station.id) ?? 0;
                 const online = station.status === "online";
-                const focused = hovered === station.id;
+                const isActive = hovered === station.id || focused === station.id;
                 return (
                   <button
                     key={station.id}
                     onMouseEnter={() => setHovered(station.id)}
                     onMouseLeave={() => setHovered(null)}
+                    onClick={() => setFocused(station.id)}
                     className={`rounded-lg border p-3 text-left transition-colors ${
-                      focused ? "border-accent bg-inset" : "border-hairline hover:bg-inset"
+                      isActive ? "border-accent bg-inset" : "border-hairline hover:bg-inset"
                     }`}
                   >
                     <div className="flex items-center justify-between">
